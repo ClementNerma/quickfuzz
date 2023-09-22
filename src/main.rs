@@ -71,16 +71,7 @@ fn run_app<B: Backend>(
     mut state: State,
 ) -> Result<String, Box<dyn Error>> {
     loop {
-        state.filtered = state
-            .list
-            .iter()
-            .filter(|result| {
-                // TODO: actual fuzzy finding algorithm
-                result.contains(state.input_widget.value())
-            })
-            .rev()
-            .cloned()
-            .collect();
+        state.filtered = fuzzy_find(state.input_widget.value(), &state.list);
 
         match state.list_state.selected() {
             Some(selected) => {
@@ -185,9 +176,37 @@ fn draw_ui<B: Backend>(f: &mut Frame<B>, state: &mut State) {
         .map(ListItem::new)
         .collect::<Vec<_>>();
 
-    let results = List::new(results).highlight_style(Style::default().bg(Color::White));
+    let results = List::new(results).highlight_style(Style::default().bg(Color::Black));
 
     f.render_stateful_widget(results, chunks[1], &mut state.list_state);
+}
+
+fn fuzzy_find(query: &str, list: &[String]) -> Vec<String> {
+    if query.is_empty() {
+        return list.to_vec();
+    }
+
+    let mut scores = list
+        .iter()
+        .enumerate()
+        .map(|(i, result)| (i, compute_fuzzy_find_score(query, result)))
+        .filter(|(_, score)| *score > 0)
+        .collect::<Vec<_>>();
+
+    scores.sort_by_key(|(_, score)| *score);
+
+    scores
+        .into_iter()
+        .map(|(i, _)| list.get(i).unwrap())
+        .cloned()
+        .collect()
+}
+
+fn compute_fuzzy_find_score(query: &str, subject: &str) -> usize {
+    query
+        .chars()
+        .map(|c| subject.chars().filter(|cc| c == *cc).count())
+        .sum()
 }
 
 struct State {
