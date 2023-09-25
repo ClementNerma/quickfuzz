@@ -5,13 +5,14 @@
 use std::{error::Error, io, process::ExitCode};
 
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event, KeyCode, MouseEventKind},
     terminal::{self, disable_raw_mode},
     ExecutableCommand,
 };
 use ratatui::{
     prelude::{Backend, Constraint, CrosstermBackend, Direction, Layout},
-    style::{Color, Style},
+    style::{Color, Style, Stylize},
+    text::{Line, Span},
     widgets::{List, ListItem, ListState, Paragraph},
     Frame, Terminal,
 };
@@ -71,7 +72,25 @@ fn run_app<B: Backend>(
     mut state: State,
 ) -> Result<String, Box<dyn Error>> {
     loop {
-        state.filtered = fuzzy_find(state.input_widget.value(), &state.list);
+        let filtered = fuzzy_find(state.input_widget.value(), &state.list);
+
+        state.filtered = filtered
+            .into_iter()
+            .map(|result| {
+                let chars = result
+                    .chars()
+                    .map(|c| {
+                        if state.input_widget.value().contains(c) {
+                            Span::styled(c.to_string(), Style::new().underlined())
+                        } else {
+                            Span::raw(c.to_string())
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                Line::from(chars)
+            })
+            .collect::<Vec<_>>();
 
         match state.list_state.selected() {
             Some(selected) => {
@@ -95,7 +114,11 @@ fn run_app<B: Backend>(
             Event::Key(key) => match key.code {
                 KeyCode::Enter => {
                     if let Some(selected) = state.list_state.selected() {
-                        return Ok(state.filtered[selected].clone());
+                        return Ok(state.filtered[selected]
+                            .spans
+                            .iter()
+                            .map(|span| span.content.as_ref())
+                            .collect::<String>());
                     }
                 }
 
@@ -136,7 +159,16 @@ fn run_app<B: Backend>(
                 }
             },
 
-            Event::Mouse(_) => todo!(),
+            Event::Mouse(evt) => match evt.kind {
+                MouseEventKind::Down(_) => todo!(),
+                MouseEventKind::Up(_) => todo!(),
+                MouseEventKind::Drag(_) => todo!(),
+                MouseEventKind::Moved => todo!(),
+                MouseEventKind::ScrollDown => todo!(),
+                MouseEventKind::ScrollUp => todo!(),
+                MouseEventKind::ScrollLeft => todo!(),
+                MouseEventKind::ScrollRight => todo!(),
+            },
 
             _ => {}
         }
@@ -213,5 +245,5 @@ struct State {
     input_widget: Input,
     list: Vec<String>,
     list_state: ListState,
-    filtered: Vec<String>,
+    filtered: Vec<Line<'static>>,
 }
